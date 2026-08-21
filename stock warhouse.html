@@ -1,0 +1,1090 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>منظومة إدارة مخزن أباتشي للعطور (المدير: الزناتي)</title>
+    
+    <!-- إعدادات PWA للموبايل -->
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="أباتشي مخزن">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%234f46e5'/><text y='65' x='50' font-size='50' text-anchor='middle' fill='white'>🛢️</text></svg>">
+
+    <!-- Web Manifest متداخل بدون ملفات خارجية -->
+    <link rel="manifest" id="pwa-manifest">
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- SheetJS (XLSX) Library -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&display=swap');
+        body {
+            font-family: 'Cairo', sans-serif;
+            background-color: #f8fafc;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        @media print {
+            body * { visibility: hidden; }
+            #printable-report-modal, #printable-report-modal *,
+            #category-stock-report-modal, #category-stock-report-modal * { visibility: visible; }
+            #printable-report-modal, #category-stock-report-modal {
+                position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; background: white !important; box-shadow: none !important;
+            }
+            .no-print { display: none !important; }
+            @page { size: A4 portrait; margin: 12mm; }
+        }
+    </style>
+</head>
+<body class="min-h-screen pb-20 lg:pb-12 relative select-none">
+
+    <!-- شريط تثبيت التطبيق PWA للموبايل -->
+    <div id="pwa-install-banner" class="hidden fixed top-0 left-0 right-0 z-[110] bg-indigo-900 text-white p-3 shadow-xl flex items-center justify-between no-print border-b border-indigo-700">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-xl shadow">📱</div>
+            <div>
+                <p class="text-xs font-bold">تطبيق مخزن أباتشي للعطور</p>
+                <p class="text-[10px] text-indigo-200">ثبت التطبيق على شاشة الموبايل للوصول السريع</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-2">
+            <button onclick="installPWA()" class="bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs px-3 py-1.5 rounded-lg shadow transition">تثبيت الأن</button>
+            <button onclick="dismissPWABanner()" class="text-slate-400 hover:text-white text-xs px-2"><i class="fa-solid fa-xmark text-base"></i></button>
+        </div>
+    </div>
+
+    <!-- شاشة تسجيل الدخول -->
+    <div id="login-overlay" class="fixed inset-0 bg-slate-900 z-[100] flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl w-full max-w-md p-8 shadow-2xl border border-slate-100 text-center relative">
+            <div class="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl">
+                <i class="fa-solid fa-user-shield"></i>
+            </div>
+            <h2 class="text-2xl font-black text-slate-900 mb-1">تسجيل الدخول للنظام</h2>
+            <p class="text-xs text-slate-500 mb-6 font-semibold">منظومة إدارة مخزن أباتشي للعطور (المدير: الزناتي)</p>
+            
+            <form onsubmit="handleLogin(event)" class="space-y-4 text-right">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">اسم المستخدم</label>
+                    <input type="text" id="login-username" required class="w-full border rounded-xl p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="admin">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">كلمة السر</label>
+                    <input type="password" id="login-password" required class="w-full border rounded-xl p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="••••••••">
+                </div>
+                
+                <p id="login-error" class="text-xs text-red-600 font-bold hidden text-center">اسم المستخدم أو كلمة السر غير صحيحة!</p>
+
+                <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl text-sm transition shadow-lg mt-2">
+                    دخول المنظومة <i class="fa-solid fa-right-to-bracket mr-1"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- الخلفية المزخرفة -->
+    <div class="absolute top-0 left-0 w-full h-[320px] bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 -z-10 shadow-lg no-print"></div>
+
+    <div class="container mx-auto px-4 max-w-7xl pt-6 lg:pt-8 no-print">
+        
+        <!-- الهيدر والأزرار الرئيسية -->
+        <header class="flex flex-col lg:flex-row justify-between items-center mb-6 text-white gap-4">
+            <div>
+                <h1 class="text-xl lg:text-3xl font-extrabold tracking-tight flex items-center gap-3">
+                    <i class="fa-solid fa-boxes-stacked text-indigo-400"></i>
+                    منظومة إدارة مخزن أباتشي للعطور (المدير: الزناتي)
+                </h1>
+                <p class="text-slate-300 text-xs lg:text-sm mt-1">متابعة الزيوت والكحول والمستلزمات وفروع (الوراق - حدائق الأهرام - إمبابة)</p>
+            </div>
+            
+            <div class="flex flex-wrap gap-2 justify-center items-center">
+                <button onclick="openItemModal()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 px-3 rounded-lg text-xs lg:text-sm shadow-lg">
+                    <i class="fa-solid fa-plus ml-1"></i> إضافة صنف
+                </button>
+                <button onclick="openTxModal()" class="bg-purple-600 hover:bg-purple-500 text-white font-bold py-2.5 px-3 rounded-lg text-xs lg:text-sm shadow-lg">
+                    <i class="fa-solid fa-arrow-right-arrow-left ml-1"></i> تسجيل حركة
+                </button>
+
+                <!-- تقارير جرد المخزن المجمع بالفئات -->
+                <button onclick="openCategoryStockModal()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold py-2.5 px-3 rounded-lg text-xs lg:text-sm shadow-lg">
+                    <i class="fa-solid fa-layer-group ml-1"></i> تقرير رصيد المخزن بالفئات
+                </button>
+                
+                <!-- أزرار طباعة الحركات اليومية -->
+                <button onclick="openReportModal('وارد')" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 px-3 rounded-lg text-xs lg:text-sm shadow-lg">
+                    <i class="fa-solid fa-arrow-down-long ml-1"></i> تقرير الوارد
+                </button>
+                <button onclick="openReportModal('صرف')" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 px-3 rounded-lg text-xs lg:text-sm shadow-lg">
+                    <i class="fa-solid fa-print ml-1"></i> تقرير المنصرف
+                </button>
+
+                <button onclick="exportFullExcel()" class="bg-emerald-800 hover:bg-emerald-700 text-white font-bold py-2.5 px-3 rounded-lg text-xs lg:text-sm shadow-lg" title="تصدير ملف Excel بشيتات منفصلة للفئات">
+                    <i class="fa-solid fa-file-excel ml-1"></i> Excel مفصل
+                </button>
+                
+                <button onclick="backupDataJSON()" class="bg-amber-700 hover:bg-amber-600 text-white font-bold py-2.5 px-3 rounded-lg text-xs lg:text-sm shadow-lg" title="تنزيل ملف البيانات">
+                    <i class="fa-solid fa-download ml-1"></i> JSON
+                </button>
+                <button onclick="triggerRestoreJSON()" class="bg-teal-600 hover:bg-teal-500 text-white font-bold py-2.5 px-3 rounded-lg text-xs lg:text-sm shadow-lg" title="رفع ملف البيانات على جهاز جديد">
+                    <i class="fa-solid fa-upload ml-1"></i> استرجاع
+                </button>
+                <input type="file" id="json-file-input" class="hidden" accept=".json" onchange="restoreDataJSON(event)">
+
+                <button onclick="openChangePassModal()" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2.5 px-3 rounded-lg text-xs lg:text-sm shadow-lg">
+                    <i class="fa-solid fa-key ml-1"></i> كلمة السر
+                </button>
+                <button onclick="logout()" class="bg-red-600 hover:bg-red-500 text-white font-bold py-2.5 px-3 rounded-lg text-xs lg:text-sm shadow-lg">
+                    <i class="fa-solid fa-power-off"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- كروت الإحصائيات -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-5 mb-6">
+            <div class="bg-white rounded-2xl p-4 md:p-6 border border-slate-100 shadow-md">
+                <p class="text-slate-500 text-xs md:text-sm font-semibold">إجمالي الأصناف</p>
+                <h3 id="kpi-total-items" class="text-xl md:text-2xl font-bold text-slate-900 mt-1">0</h3>
+            </div>
+            <div class="bg-white rounded-2xl p-4 md:p-6 border border-slate-100 shadow-md">
+                <p class="text-slate-500 text-xs md:text-sm font-semibold">إجمالي الوارد</p>
+                <h3 id="kpi-total-in" class="text-xl md:text-2xl font-bold text-emerald-600 mt-1">0</h3>
+            </div>
+            <div class="bg-white rounded-2xl p-4 md:p-6 border border-slate-100 shadow-md">
+                <p class="text-slate-500 text-xs md:text-sm font-semibold">المنصرف للفروع</p>
+                <h3 id="kpi-total-out" class="text-xl md:text-2xl font-bold text-red-600 mt-1">0</h3>
+            </div>
+            <div class="bg-white rounded-2xl p-4 md:p-6 border border-slate-100 shadow-md">
+                <p class="text-slate-500 text-xs md:text-sm font-semibold">تحت حد الأمان</p>
+                <h3 id="kpi-low-stock" class="text-xl md:text-2xl font-bold text-amber-600 mt-1">0</h3>
+            </div>
+        </div>
+
+        <!-- جدول الأرصدة الحالية -->
+        <div class="bg-white rounded-2xl border border-slate-100 shadow-md overflow-hidden mb-8">
+            <div class="p-4 md:p-5 border-b border-slate-100 bg-slate-50/50 flex flex-col gap-3">
+                <div class="flex flex-col md:flex-row justify-between items-center gap-3">
+                    <h2 class="font-bold text-slate-800 text-base md:text-lg flex items-center gap-2">
+                        <i class="fa-solid fa-warehouse text-indigo-600"></i> جدول رصيد المخزن الحالي
+                    </h2>
+                    <div class="relative w-full md:w-80">
+                        <input type="text" id="search-input" oninput="renderTable()" class="bg-white border text-slate-800 text-sm rounded-xl block w-full pr-10 pl-3 py-2 focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm" placeholder="🔍 ابحث باسم الصنف...">
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-200/60">
+                    <span class="text-xs font-bold text-slate-500 ml-1">تصفية حسب الفئة:</span>
+                    <div id="category-chips-container" class="flex flex-wrap gap-1.5"></div>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto w-full">
+                <table class="w-full text-right text-xs md:text-sm">
+                    <thead class="bg-slate-50 text-slate-500 font-bold border-b">
+                        <tr>
+                            <th class="px-4 py-3">اسم الصنف</th>
+                            <th class="px-4 py-3">الفئة</th>
+                            <th class="px-4 py-3">الوحدة</th>
+                            <th class="px-4 py-3">الوارد</th>
+                            <th class="px-4 py-3">الصرف</th>
+                            <th class="px-4 py-3">الرصيد الحالي</th>
+                            <th class="px-4 py-3 text-center">الإجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body" class="divide-y divide-slate-100"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- سجل الحركات اليومي -->
+        <div class="bg-white rounded-2xl border border-slate-100 shadow-md overflow-hidden">
+            <div class="p-4 md:p-5 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row justify-between items-center gap-3">
+                <h2 class="font-bold text-slate-800 text-base md:text-lg flex items-center gap-2">
+                    <i class="fa-solid fa-clock-rotate-left text-purple-600"></i> سجل الحركات التفصيلي
+                </h2>
+                <div class="flex gap-2 w-full md:w-auto">
+                    <input type="date" id="filter-date" onchange="renderLogTable()" class="bg-white border text-slate-700 text-xs md:text-sm rounded-lg p-2 w-full md:w-auto">
+                    <button onclick="clearDateFilter()" class="text-xs bg-slate-200 hover:bg-slate-300 px-3 py-2 rounded-lg font-bold whitespace-nowrap">الكل</button>
+                </div>
+            </div>
+            <div class="overflow-x-auto w-full">
+                <table class="w-full text-right text-xs md:text-sm">
+                    <thead class="bg-slate-50 text-slate-500 font-bold border-b">
+                        <tr>
+                            <th class="px-4 py-3">التاريخ</th>
+                            <th class="px-4 py-3">النوع</th>
+                            <th class="px-4 py-3">الصنف</th>
+                            <th class="px-4 py-3">الكمية</th>
+                            <th class="px-4 py-3">الجهة / الفرع</th>
+                            <th class="px-4 py-3 text-center">إجراء</th>
+                        </tr>
+                    </thead>
+                    <tbody id="log-table-body" class="divide-y divide-slate-100"></tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- شريط تنقل سفلي سريع لشاشات الموبايل PWA -->
+    <div class="lg:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 flex justify-around items-center p-2 z-40 text-white text-[11px] no-print">
+        <button onclick="openItemModal()" class="flex flex-col items-center gap-1 text-indigo-400">
+            <i class="fa-solid fa-plus-circle text-lg"></i>
+            <span>إضافة صنف</span>
+        </button>
+        <button onclick="openTxModal()" class="flex flex-col items-center gap-1 text-purple-400">
+            <i class="fa-solid fa-arrow-right-arrow-left text-lg"></i>
+            <span>حركة</span>
+        </button>
+        <button onclick="openCategoryStockModal()" class="flex flex-col items-center gap-1 text-amber-400">
+            <i class="fa-solid fa-layer-group text-lg"></i>
+            <span>الجرد</span>
+        </button>
+        <button onclick="window.scrollTo({top: 0, behavior: 'smooth'})" class="flex flex-col items-center gap-1 text-slate-300">
+            <i class="fa-solid fa-arrow-up text-lg"></i>
+            <span>الأعلى</span>
+        </button>
+    </div>
+
+    <!-- Modals -->
+    <!-- (1) نافذة إضافة صنف -->
+    <div id="item-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center hidden no-print p-4">
+        <div class="bg-white rounded-2xl w-full max-w-lg p-6 shadow-2xl">
+            <h3 class="font-bold text-lg mb-4 text-slate-800">إضافة صنف جديد بالمخزن</h3>
+            <form onsubmit="saveItem(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold mb-1 text-slate-700">اسم الصنف</label>
+                    <input type="text" id="input-item-name" required class="w-full border rounded-lg p-2.5 text-sm" placeholder="مثال: زيت انفرتوس / زجاج 50مل / كحول">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold mb-1 text-slate-700">الفئة</label>
+                    <div class="flex gap-2">
+                        <select id="input-item-category" required class="w-full border rounded-lg p-2.5 bg-white text-sm font-semibold"></select>
+                        <button type="button" onclick="addNewCategory()" class="bg-indigo-100 hover:bg-indigo-200 text-indigo-800 font-bold px-3 py-2 rounded-lg text-xs whitespace-nowrap shadow-sm"><i class="fa-solid fa-plus ml-1"></i> جديدة</button>
+                        <button type="button" onclick="deleteCategory()" class="bg-red-100 hover:bg-red-200 text-red-700 font-bold px-3 py-2 rounded-lg text-xs whitespace-nowrap shadow-sm"><i class="fa-solid fa-trash-can"></i></button>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold mb-1 text-slate-700">وحدة القياس الرئيسية</label>
+                    <div class="flex gap-2">
+                        <select id="input-item-unit" required class="w-full border rounded-lg p-2.5 bg-white text-sm font-semibold"></select>
+                        <button type="button" onclick="addNewUnit()" class="bg-indigo-100 hover:bg-indigo-200 text-indigo-800 font-bold px-3 py-2 rounded-lg text-xs whitespace-nowrap shadow-sm"><i class="fa-solid fa-plus ml-1"></i> جديدة</button>
+                        <button type="button" onclick="deleteUnit()" class="bg-red-100 hover:bg-red-200 text-red-700 font-bold px-3 py-2 rounded-lg text-xs whitespace-nowrap shadow-sm"><i class="fa-solid fa-trash-can"></i></button>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold mb-1 text-slate-700">حد الأمان (تنبيه نقص الرصيد)</label>
+                    <input type="number" id="input-item-min" step="any" min="0" value="1" class="w-full border rounded-lg p-2.5 text-sm">
+                </div>
+                <div class="flex justify-end gap-3 pt-2">
+                    <button type="button" onclick="closeItemModal()" class="px-4 py-2 bg-slate-100 rounded-lg text-sm">إلغاء</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg font-bold text-sm">حفظ الصنف</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- (2) نافذة تسجيل حركة -->
+    <div id="tx-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center hidden no-print p-4">
+        <div class="bg-white rounded-2xl w-full max-w-lg p-6 shadow-2xl">
+            <h3 class="font-bold text-lg mb-4 text-purple-900">تسجيل حركة (وارد / صرف)</h3>
+            <form onsubmit="saveTransaction(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold mb-1">نوع الحركة</label>
+                    <select id="input-tx-type" onchange="toggleBranchField()" required class="w-full border rounded-lg p-2.5 text-sm">
+                        <option value="وارد">📥 وارد (إضافة للمخزن)</option>
+                        <option value="صرف">📤 صرف (تحويل لفرع)</option>
+                    </select>
+                </div>
+                <div id="branch-select-container" class="hidden">
+                    <label class="block text-xs font-bold mb-1 text-purple-800">اختر الفرع المستلم</label>
+                    <select id="input-tx-branch" class="w-full border rounded-lg p-2.5 bg-purple-50 text-sm">
+                        <option value="فرع الوراق">فرع الوراق</option>
+                        <option value="فرع حدائق الأهرام">فرع حدائق الأهرام</option>
+                        <option value="فرع إمبابة">فرع إمبابة</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold mb-1">اختر الصنف</label>
+                    <select id="input-tx-item" onchange="updateQtyUnitLabel()" required class="w-full border rounded-lg p-2.5 text-sm"></select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold mb-1">الكمية (<span id="unit-label" class="text-indigo-600 font-bold">---</span>)</label>
+                    <input type="number" step="any" min="0.01" id="input-tx-qty" required class="w-full border rounded-lg p-2.5 font-bold text-lg">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold mb-1">التاريخ</label>
+                    <input type="date" id="input-tx-date" required class="w-full border rounded-lg p-2.5 text-sm">
+                </div>
+                <div class="flex justify-end gap-3 pt-2">
+                    <button type="button" onclick="closeTxModal()" class="px-4 py-2 bg-slate-100 rounded-lg text-sm">إلغاء</button>
+                    <button type="submit" class="px-4 py-2 bg-purple-600 text-white rounded-lg font-bold text-sm">تأكيد الحفظ</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- (3) نافذة تغيير كلمة السر -->
+    <div id="change-pass-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center hidden no-print p-4">
+        <div class="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl">
+            <h3 class="font-bold text-lg mb-4 text-slate-800">تغيير كلمة السر</h3>
+            <form onsubmit="saveNewPassword(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold mb-1">كلمة السر الحالية</label>
+                    <input type="password" id="curr-pass-input" required class="w-full border rounded-lg p-2.5 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold mb-1">كلمة السر الجديدة</label>
+                    <input type="password" id="new-pass-input" required class="w-full border rounded-lg p-2.5 text-sm">
+                </div>
+                <div class="flex justify-end gap-3 pt-2">
+                    <button type="button" onclick="closeChangePassModal()" class="px-4 py-2 bg-slate-100 rounded-lg text-sm">إلغاء</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold">حفظ كلمة السر</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- (4) تقرير رصيد المخزن المجمع مقسم بالفئات A4 -->
+    <div id="category-stock-report-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-2 md:p-4 overflow-y-auto">
+        <div class="bg-white rounded-xl w-full max-w-4xl mx-auto shadow-2xl p-4 md:p-8 border border-slate-200 my-auto">
+            <div class="flex justify-between items-center border-b pb-4 mb-4 gap-3 no-print">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-boxes-packing text-amber-600 text-xl"></i>
+                    <h3 class="font-bold text-sm md:text-lg text-slate-800">تقرير رصيد المخزن المفصل بالفئات</h3>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="window.print()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs md:text-sm shadow"><i class="fa-solid fa-print ml-1"></i> طباعة A4</button>
+                    <button onclick="closeCategoryStockModal()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold px-3 py-1.5 rounded-lg text-xs md:text-sm">إغلاق</button>
+                </div>
+            </div>
+
+            <div id="cat-report-content" class="text-slate-900 leading-relaxed">
+                <div class="flex justify-between items-center border-b-2 border-slate-900 pb-4 mb-6">
+                    <div>
+                        <h1 class="text-xl md:text-2xl font-black text-slate-900">أباتشي للعطور - Apache Perfumes</h1>
+                        <p class="text-xs text-slate-600 font-bold mt-1">تقرير جرد رصيد المخزن الرئيسي المفصل حسب الفئة</p>
+                        <p class="text-xs font-extrabold text-indigo-800 mt-1">المدير المسؤول: الزناتي</p>
+                    </div>
+                    <div class="text-left text-xs font-semibold text-slate-700 space-y-1">
+                        <p>تاريخ الجرد: <span id="cat-report-date" class="font-bold text-black">---</span></p>
+                        <p>إجمالي الأصناف: <span id="cat-report-total-items" class="font-bold text-black">0</span> صنف</p>
+                    </div>
+                </div>
+
+                <div id="categories-tables-container" class="space-y-6"></div>
+
+                <div class="grid grid-cols-3 gap-4 text-center pt-8 border-t border-slate-300 text-xs font-bold text-slate-800 mt-8">
+                    <div><p class="mb-8">أمناء المخزن (الزناتي)</p><p class="text-slate-400">...............................</p></div>
+                    <div><p class="mb-8">مراجعة الجرد</p><p class="text-slate-400">...............................</p></div>
+                    <div><p class="mb-8">اعتماد أباتشي للعطور</p><p class="text-slate-400">...............................</p></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- (5) نافذة تقارير الحركات A4 -->
+    <div id="printable-report-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-2 md:p-4 overflow-y-auto">
+        <div class="bg-white rounded-xl w-full max-w-4xl mx-auto shadow-2xl p-4 md:p-8 border border-slate-200 my-auto">
+            <div class="flex flex-col md:flex-row justify-between items-center border-b pb-4 mb-4 gap-3 no-print">
+                <div class="flex items-center gap-3 w-full md:w-auto">
+                    <h3 class="font-bold text-sm md:text-lg text-slate-800 whitespace-nowrap">تخصيص التقرير</h3>
+                    <select id="report-type-filter" onchange="renderReportContent()" class="border border-slate-300 rounded-lg p-2 text-xs md:text-sm font-bold text-indigo-900 bg-slate-50 w-full md:w-auto">
+                        <option value="وارد">📥 تقرير الوارد للمخزن</option>
+                        <option value="فرع الوراق">📤 منصرف فرع الوراق</option>
+                        <option value="فرع حدائق الأهرام">📤 منصرف فرع حدائق الأهرام</option>
+                        <option value="فرع إمبابة">📤 منصرف فرع إمبابة</option>
+                        <option value="الكل">📊 تقرير موحد شامل</option>
+                    </select>
+                </div>
+
+                <div class="flex gap-2">
+                    <button onclick="window.print()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs md:text-sm shadow"><i class="fa-solid fa-print ml-1"></i> طباعة</button>
+                    <button onclick="closeReportModal()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold px-3 py-1.5 rounded-lg text-xs md:text-sm">إغلاق</button>
+                </div>
+            </div>
+
+            <div id="report-content" class="text-slate-900 leading-relaxed">
+                <div class="flex justify-between items-center border-b-2 border-slate-900 pb-4 mb-6">
+                    <div>
+                        <h1 class="text-xl md:text-2xl font-black text-slate-900">أباتشي للعطور - Apache Perfumes</h1>
+                        <p class="text-xs text-slate-600 font-bold mt-1">إدارة المخازن | المسؤول: الزناتي</p>
+                        <h2 id="report-title-display" class="text-base md:text-lg font-bold text-indigo-700 mt-2">---</h2>
+                    </div>
+                    <div class="text-left text-xs font-semibold text-slate-700 space-y-1">
+                        <p>تاريخ التقرير: <span id="report-date-display" class="font-bold text-black">---</span></p>
+                        <p>رقم التقرير: <span id="report-id-display" class="font-bold text-black">---</span></p>
+                    </div>
+                </div>
+
+                <div id="report-summary-cards" class="grid grid-cols-2 gap-4 mb-6 text-center">
+                    <div class="border border-slate-300 p-3 rounded-lg bg-slate-50">
+                        <span class="text-xs font-bold text-slate-600 block">إجمالي عدد الحركات</span>
+                        <span id="rep-summary-count" class="text-lg font-black text-slate-900">0</span>
+                    </div>
+                    <div class="border border-slate-300 p-3 rounded-lg bg-slate-50">
+                        <span class="text-xs font-bold text-slate-600 block">إجمالي الكميات</span>
+                        <span id="rep-summary-qty" class="text-lg font-black text-indigo-900">0</span>
+                    </div>
+                </div>
+
+                <h4 class="font-bold text-sm mb-2 text-slate-800 border-r-4 border-indigo-600 pr-2">سجل البيانات التفصيلي</h4>
+                <table class="w-full text-right text-xs border-collapse border border-slate-300 mb-8">
+                    <thead>
+                        <tr class="bg-slate-100 text-slate-800 border-b border-slate-300 font-bold">
+                            <th class="border border-slate-300 p-2 text-center">م</th>
+                            <th class="border border-slate-300 p-2">نوع الحركة</th>
+                            <th class="border border-slate-300 p-2">اسم الصنف</th>
+                            <th class="border border-slate-300 p-2">الفئة</th>
+                            <th class="border border-slate-300 p-2">الكمية</th>
+                            <th class="border border-slate-300 p-2">الجهة / الفرع المستلم</th>
+                            <th class="border border-slate-300 p-2 text-center">التاريخ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="report-table-body"></tbody>
+                </table>
+
+                <div class="grid grid-cols-3 gap-4 text-center pt-8 border-t border-slate-300 text-xs font-bold text-slate-800">
+                    <div><p class="mb-8">إدارة المخازن (الزناتي)</p><p class="text-slate-400">...............................</p></div>
+                    <div><p class="mb-8">مستلم الفرع / الجهة</p><p class="text-slate-400">...............................</p></div>
+                    <div><p class="mb-8">اعتماد أباتشي للعطور</p><p class="text-slate-400">...............................</p></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- السكريبتات وإعدادات المنظومة كاملة -->
+    <script>
+        // --- 1. بناء ملف المنيفست Web Manifest ديناميكياً لتشغيل PWA ---
+        const pwaManifestObj = {
+            "name": "منظومة إدارة مخزن أباتشي للعطور",
+            "short_name": "مخزن أباتشي",
+            "start_url": "./",
+            "display": "standalone",
+            "background_color": "#0f172a",
+            "theme_color": "#0f172a",
+            "orientation": "portrait",
+            "icons": [{
+                "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%234f46e5'/><text y='65' x='50' font-size='50' text-anchor='middle' fill='white'>🛢️</text></svg>",
+                "sizes": "192x192 512x512",
+                "type": "image/svg+xml"
+            }]
+        };
+        const manifestBlob = new Blob([JSON.stringify(pwaManifestObj)], {type: 'application/json'});
+        document.getElementById('pwa-manifest').setAttribute('href', URL.createObjectURL(manifestBlob));
+
+        // --- 2. إعدادات تثبيت PWA على الموبايل ---
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            const banner = document.getElementById('pwa-install-banner');
+            if (banner) banner.classList.remove('hidden');
+        });
+
+        function installPWA() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then(() => {
+                    deferredPrompt = null;
+                    dismissPWABanner();
+                });
+            }
+        }
+
+        function dismissPWABanner() {
+            const banner = document.getElementById('pwa-install-banner');
+            if (banner) banner.classList.add('hidden');
+        }
+
+        // --- 3. إدارة البيانات والحالة (State) ---
+        let defaultCategories = ["زيوت عطرية", "كحول ومذيبات", "زجاج ومستلزمات", "عبوات وتغليف"];
+        let defaultUnits = ["جرام", "كيلو", "لتر", "قطعة"];
+
+        let appData = {
+            auth: { username: "admin", password: "123" },
+            categories: [...defaultCategories],
+            units: [...defaultUnits],
+            items: [],
+            transactions: []
+        };
+
+        let selectedCategoryFilter = "الكل";
+
+        // تحميل البيانات من LocalStorage
+        function loadData() {
+            const stored = localStorage.getItem('apache_store_db');
+            if (stored) {
+                try {
+                    appData = JSON.parse(stored);
+                    if (!appData.categories) appData.categories = [...defaultCategories];
+                    if (!appData.units) appData.units = [...defaultUnits];
+                } catch(e) {
+                    console.error("خطأ في قراءة البيانات المحلية");
+                }
+            } else {
+                saveData();
+            }
+        }
+
+        function saveData() {
+            localStorage.setItem('apache_store_db', JSON.stringify(appData));
+        }
+
+        // --- 4. تسجيل الدخول والخروج ---
+        function checkAuth() {
+            const loggedIn = sessionStorage.getItem('apache_logged_in');
+            const overlay = document.getElementById('login-overlay');
+            if (loggedIn === 'true') {
+                overlay.classList.add('hidden');
+            } else {
+                overlay.classList.remove('hidden');
+            }
+        }
+
+        function handleLogin(e) {
+            e.preventDefault();
+            const u = document.getElementById('login-username').value.trim();
+            const p = document.getElementById('login-password').value.trim();
+            const err = document.getElementById('login-error');
+
+            if (u === appData.auth.username && p === appData.auth.password) {
+                sessionStorage.setItem('apache_logged_in', 'true');
+                err.classList.add('hidden');
+                document.getElementById('login-overlay').classList.add('hidden');
+            } else {
+                err.classList.remove('hidden');
+            }
+        }
+
+        function logout() {
+            sessionStorage.removeItem('apache_logged_in');
+            checkAuth();
+        }
+
+        // --- 5. العرض والتحديث الرئيسي (UI Rendering) ---
+        function updateAllUI() {
+            renderCategoryChips();
+            populateCategorySelect();
+            populateUnitSelect();
+            populateTxItemsSelect();
+            renderTable();
+            renderLogTable();
+            updateKPIs();
+        }
+
+        function renderCategoryChips() {
+            const container = document.getElementById('category-chips-container');
+            let html = `<button onclick="setCategoryFilter('الكل')" class="px-3 py-1 rounded-lg text-xs font-bold transition shadow-sm ${selectedCategoryFilter === 'الكل' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">الكل</button>`;
+            
+            appData.categories.forEach(cat => {
+                const active = selectedCategoryFilter === cat;
+                html += `<button onclick="setCategoryFilter('${cat}')" class="px-3 py-1 rounded-lg text-xs font-bold transition shadow-sm ${active ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">${cat}</button>`;
+            });
+
+            container.innerHTML = html;
+        }
+
+        function setCategoryFilter(cat) {
+            selectedCategoryFilter = cat;
+            renderCategoryChips();
+            renderTable();
+        }
+
+        function populateCategorySelect() {
+            const select = document.getElementById('input-item-category');
+            select.innerHTML = appData.categories.map(c => `<option value="${c}">${c}</option>`).join('');
+        }
+
+        function populateUnitSelect() {
+            const select = document.getElementById('input-item-unit');
+            select.innerHTML = appData.units.map(u => `<option value="${u}">${u}</option>`).join('');
+        }
+
+        function populateTxItemsSelect() {
+            const select = document.getElementById('input-tx-item');
+            if (appData.items.length === 0) {
+                select.innerHTML = `<option value="">-- لا توجد أصناف --</option>`;
+                return;
+            }
+            select.innerHTML = appData.items.map(i => `<option value="${i.id}">${i.name} (${i.category})</option>`).join('');
+            updateQtyUnitLabel();
+        }
+
+        function getItemCalculatedStock(itemId) {
+            let inQty = 0;
+            let outQty = 0;
+            appData.transactions.filter(t => t.itemId === itemId).forEach(t => {
+                if (t.type === 'وارد') inQty += parseFloat(t.qty || 0);
+                if (t.type === 'صرف') outQty += parseFloat(t.qty || 0);
+            });
+            return { inQty, outQty, currentStock: inQty - outQty };
+        }
+
+        function updateKPIs() {
+            let totalItems = appData.items.length;
+            let totalIn = 0;
+            let totalOut = 0;
+            let lowStockCount = 0;
+
+            appData.items.forEach(item => {
+                const calc = getItemCalculatedStock(item.id);
+                totalIn += calc.inQty;
+                totalOut += calc.outQty;
+                if (calc.currentStock <= (item.minStock || 0)) {
+                    lowStockCount++;
+                }
+            });
+
+            document.getElementById('kpi-total-items').textContent = totalItems;
+            document.getElementById('kpi-total-in').textContent = totalIn.toLocaleString('ar-EG');
+            document.getElementById('kpi-total-out').textContent = totalOut.toLocaleString('ar-EG');
+            document.getElementById('kpi-low-stock').textContent = lowStockCount;
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('table-body');
+            const search = document.getElementById('search-input').value.trim().toLowerCase();
+
+            let filtered = appData.items.filter(item => {
+                const matchSearch = item.name.toLowerCase().includes(search);
+                const matchCategory = (selectedCategoryFilter === 'الكل') || (item.category === selectedCategoryFilter);
+                return matchSearch && matchCategory;
+            });
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center py-6 text-slate-400 font-bold">لا توجد أصناف مطابقة للبحث</td></tr>`;
+                return;
+            }
+
+            let html = '';
+            filtered.forEach(item => {
+                const calc = getItemCalculatedStock(item.id);
+                const isLow = calc.currentStock <= (item.minStock || 0);
+
+                html += `
+                <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
+                    <td class="px-4 py-3 font-bold text-slate-800">${item.name}</td>
+                    <td class="px-4 py-3"><span class="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-md text-xs font-bold">${item.category}</span></td>
+                    <td class="px-4 py-3 text-slate-600 font-semibold">${item.unit}</td>
+                    <td class="px-4 py-3 text-emerald-600 font-bold">${calc.inQty}</td>
+                    <td class="px-4 py-3 text-red-600 font-bold">${calc.outQty}</td>
+                    <td class="px-4 py-3">
+                        <span class="font-extrabold px-2.5 py-1 rounded-lg text-xs ${isLow ? 'bg-red-100 text-red-700 animate-pulse' : 'bg-emerald-100 text-emerald-800'}">
+                            ${calc.currentStock} ${item.unit}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 text-center">
+                        <button onclick="deleteItem('${item.id}')" class="text-red-500 hover:text-red-700 p-1 rounded transition" title="حذف الصنف"><i class="fa-solid fa-trash-can text-sm"></i></button>
+                    </td>
+                </tr>`;
+            });
+            tbody.innerHTML = html;
+        }
+
+        function renderLogTable() {
+            const tbody = document.getElementById('log-table-body');
+            const dateFilter = document.getElementById('filter-date').value;
+
+            let logs = [...appData.transactions];
+            if (dateFilter) {
+                logs = logs.filter(t => t.date === dateFilter);
+            }
+
+            logs.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+            if (logs.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="text-center py-6 text-slate-400 font-bold">لا توجد حركات مسجلة</td></tr>`;
+                return;
+            }
+
+            let html = '';
+            logs.forEach(tx => {
+                const item = appData.items.find(i => i.id === tx.itemId) || { name: 'صنف محذوف', unit: '' };
+                const isIn = tx.type === 'وارد';
+
+                html += `
+                <tr class="hover:bg-slate-50 border-b border-slate-100">
+                    <td class="px-4 py-3 text-slate-600 font-medium">${tx.date}</td>
+                    <td class="px-4 py-3 font-bold">
+                        <span class="px-2 py-0.5 rounded text-xs ${isIn ? 'bg-emerald-100 text-emerald-700' : 'bg-purple-100 text-purple-700'}">${tx.type}</span>
+                    </td>
+                    <td class="px-4 py-3 font-bold text-slate-800">${item.name}</td>
+                    <td class="px-4 py-3 font-extrabold ${isIn ? 'text-emerald-600' : 'text-purple-600'}">${tx.qty} ${item.unit}</td>
+                    <td class="px-4 py-3 text-slate-600 font-semibold">${isIn ? 'المخزن الرئيسي' : (tx.branch || 'غير محدد')}</td>
+                    <td class="px-4 py-3 text-center">
+                        <button onclick="deleteTransaction('${tx.id}')" class="text-red-400 hover:text-red-600 p-1" title="حذف الحركة"><i class="fa-solid fa-xmark text-base"></i></button>
+                    </td>
+                </tr>`;
+            });
+            tbody.innerHTML = html;
+        }
+
+        function clearDateFilter() {
+            document.getElementById('filter-date').value = '';
+            renderLogTable();
+        }
+
+        // --- 6. النوافذ والمعاملات (Modals Actions) ---
+        function openItemModal() { document.getElementById('item-modal').classList.remove('hidden'); }
+        function closeItemModal() { document.getElementById('item-modal').classList.add('hidden'); }
+
+        function addNewCategory() {
+            const name = prompt("أدخل اسم الفئة الجديدة:");
+            if (name && name.trim()) {
+                const clean = name.trim();
+                if (!appData.categories.includes(clean)) {
+                    appData.categories.push(clean);
+                    saveData();
+                    updateAllUI();
+                }
+            }
+        }
+
+        function deleteCategory() {
+            const select = document.getElementById('input-item-category');
+            const val = select.value;
+            if (confirm(`هل أنت تأكد من حذف الفئة (${val})؟`)) {
+                appData.categories = appData.categories.filter(c => c !== val);
+                saveData();
+                updateAllUI();
+            }
+        }
+
+        function addNewUnit() {
+            const name = prompt("أدخل اسم وحدة القياس الجديدة:");
+            if (name && name.trim()) {
+                const clean = name.trim();
+                if (!appData.units.includes(clean)) {
+                    appData.units.push(clean);
+                    saveData();
+                    updateAllUI();
+                }
+            }
+        }
+
+        function deleteUnit() {
+            const select = document.getElementById('input-item-unit');
+            const val = select.value;
+            if (confirm(`هل أنت تأكد من حذف الوحدة (${val})؟`)) {
+                appData.units = appData.units.filter(u => u !== val);
+                saveData();
+                updateAllUI();
+            }
+        }
+
+        function saveItem(e) {
+            e.preventDefault();
+            const name = document.getElementById('input-item-name').value.trim();
+            const category = document.getElementById('input-item-category').value;
+            const unit = document.getElementById('input-item-unit').value;
+            const minStock = parseFloat(document.getElementById('input-item-min').value || 0);
+
+            const newItem = {
+                id: 'item_' + Date.now(),
+                name, category, unit, minStock
+            };
+
+            appData.items.push(newItem);
+            saveData();
+            updateAllUI();
+            closeItemModal();
+            document.getElementById('input-item-name').value = '';
+        }
+
+        function deleteItem(id) {
+            if (confirm('هل ترغب بحذف هذا الصنف وكافة حركاته المسجلة؟')) {
+                appData.items = appData.items.filter(i => i.id !== id);
+                appData.transactions = appData.transactions.filter(t => t.itemId !== id);
+                saveData();
+                updateAllUI();
+            }
+        }
+
+        // --- 7. حركة المخزن (وارد / صرف) ---
+        function openTxModal() {
+            if (appData.items.length === 0) {
+                alert('رجاءً أضف أصناف أولاً قبل تسجيل حركة!');
+                return;
+            }
+            document.getElementById('input-tx-date').valueAsDate = new Date();
+            document.getElementById('tx-modal').classList.remove('hidden');
+            toggleBranchField();
+        }
+        function closeTxModal() { document.getElementById('tx-modal').classList.add('hidden'); }
+
+        function toggleBranchField() {
+            const type = document.getElementById('input-tx-type').value;
+            const container = document.getElementById('branch-select-container');
+            if (type === 'صرف') {
+                container.classList.remove('hidden');
+            } else {
+                container.classList.add('hidden');
+            }
+        }
+
+        function updateQtyUnitLabel() {
+            const itemId = document.getElementById('input-tx-item').value;
+            const item = appData.items.find(i => i.id === itemId);
+            document.getElementById('unit-label').textContent = item ? item.unit : '---';
+        }
+
+        function saveTransaction(e) {
+            e.preventDefault();
+            const type = document.getElementById('input-tx-type').value;
+            const branch = type === 'صرف' ? document.getElementById('input-tx-branch').value : 'المخزن الرئيسي';
+            const itemId = document.getElementById('input-tx-item').value;
+            const qty = parseFloat(document.getElementById('input-tx-qty').value);
+            const date = document.getElementById('input-tx-date').value;
+
+            if (type === 'صرف') {
+                const calc = getItemCalculatedStock(itemId);
+                if (qty > calc.currentStock) {
+                    if (!confirm(`تنبيه: الكمية المطلوبة للصرف (${qty}) أكبر من الرصيد المتاح (${calc.currentStock}). هل تريد المتابعة على أي حال؟`)) {
+                        return;
+                    }
+                }
+            }
+
+            const newTx = {
+                id: 'tx_' + Date.now(),
+                type, branch, itemId, qty, date, timestamp: new Date().toISOString()
+            };
+
+            appData.transactions.push(newTx);
+                saveData();
+            updateAllUI();
+            closeTxModal();
+            document.getElementById('input-tx-qty').value = '';
+        }
+
+        function deleteTransaction(id) {
+            if (confirm('هل أنت متأكد من إلغاء هذه الحركة؟')) {
+                appData.transactions = appData.transactions.filter(t => t.id !== id);
+                saveData();
+                updateAllUI();
+            }
+        }
+
+        // --- 8. تغيير كلمة السر ---
+        function openChangePassModal() { document.getElementById('change-pass-modal').classList.remove('hidden'); }
+        function closeChangePassModal() { document.getElementById('change-pass-modal').classList.add('hidden'); }
+
+        function saveNewPassword(e) {
+            e.preventDefault();
+            const curr = document.getElementById('curr-pass-input').value;
+            const next = document.getElementById('new-pass-input').value;
+
+            if (curr !== appData.auth.password) {
+                alert('كلمة السر الحالية غير صحيحة!');
+                return;
+            }
+
+            appData.auth.password = next;
+            saveData();
+            alert('تم تغيير كلمة السر بنجاح!');
+            closeChangePassModal();
+        }
+
+        // --- 9. النسخ الاحتياطي واسترجاع البيانات (JSON) ---
+        function backupDataJSON() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appData, null, 2));
+            const dlAnchorElem = document.createElement('a');
+            dlAnchorElem.setAttribute("href", dataStr);
+            dlAnchorElem.setAttribute("download", `apache_store_backup_${new Date().toISOString().slice(0,10)}.json`);
+            document.body.appendChild(dlAnchorElem);
+            dlAnchorElem.click();
+            dlAnchorElem.remove();
+        }
+
+        function triggerRestoreJSON() { document.getElementById('json-file-input').click(); }
+
+        function restoreDataJSON(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    const parsed = JSON.parse(evt.target.result);
+                    if (parsed && parsed.items && parsed.transactions) {
+                        appData = parsed;
+                        saveData();
+                        updateAllUI();
+                        alert('تم استرجاع البيانات بنجاح!');
+                    } else {
+                        alert('ملف البيانات غير صالح!');
+                    }
+                } catch(err) {
+                    alert('حدث خطأ أثناء قراءة الملف!');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // --- 10. تصدير ملف Excel مفصل ---
+        function exportFullExcel() {
+            if (typeof XLSX === 'undefined') {
+                alert('مكتبة Excel غير جاهزة، يرجى الاتصال بالإنترنت!');
+                return;
+            }
+
+            const wb = XLSX.utils.book_new();
+
+            // شيت 1: ملخص الرصيد العام
+            const summaryData = appData.items.map(item => {
+                const calc = getItemCalculatedStock(item.id);
+                return {
+                    "اسم الصنف": item.name,
+                    "الفئة": item.category,
+                    "وحدة القياس": item.unit,
+                    "إجمالي الوارد": calc.inQty,
+                    "إجمالي المنصرف": calc.outQty,
+                    "الرصيد الحالي": calc.currentStock,
+                    "حد الأمان": item.minStock
+                };
+            });
+            const wsSummary = XLSX.utils.json_to_sheet(summaryData);
+            XLSX.utils.book_append_sheet(wb, wsSummary, "الرصيد العام");
+
+            // شيتات منفصلة لكل فئة
+            appData.categories.forEach(cat => {
+                const catItems = appData.items.filter(i => i.category === cat);
+                const catData = catItems.map(item => {
+                    const calc = getItemCalculatedStock(item.id);
+                    return {
+                        "اسم الصنف": item.name,
+                        "الوحدة": item.unit,
+                        "الوارد": calc.inQty,
+                        "المنصرف": calc.outQty,
+                        "الرصيد الحالي": calc.currentStock
+                    };
+                });
+                if (catData.length > 0) {
+                    const wsCat = XLSX.utils.json_to_sheet(catData);
+                    XLSX.utils.book_append_sheet(wb, wsCat, cat.substring(0, 30));
+                }
+            });
+
+            XLSX.writeFile(wb, `جرد_مخزن_أباتشي_${new Date().toISOString().slice(0,10)}.xlsx`);
+        }
+
+        // --- 11. تقارير طباعة A4 (المجمع والحركات) ---
+        function openCategoryStockModal() {
+            document.getElementById('cat-report-date').textContent = new Date().toLocaleDateString('ar-EG');
+            document.getElementById('cat-report-total-items').textContent = appData.items.length;
+
+            const container = document.getElementById('categories-tables-container');
+            let html = '';
+
+            appData.categories.forEach(cat => {
+                const catItems = appData.items.filter(i => i.category === cat);
+                if (catItems.length === 0) return;
+
+                html += `
+                <div class="border border-slate-300 rounded-lg overflow-hidden">
+                    <div class="bg-slate-800 text-white px-4 py-2 font-bold text-sm flex justify-between items-center">
+                        <span>فئة: ${cat}</span>
+                        <span class="text-xs bg-slate-700 px-2 py-0.5 rounded">${catItems.length} صنف</span>
+                    </div>
+                    <table class="w-full text-right text-xs border-collapse">
+                        <thead>
+                            <tr class="bg-slate-100 border-b border-slate-300 font-bold text-slate-800">
+                                <th class="p-2 border-l border-slate-200">اسم الصنف</th>
+                                <th class="p-2 border-l border-slate-200">الوحدة</th>
+                                <th class="p-2 border-l border-slate-200">إجمالي الوارد</th>
+                                <th class="p-2 border-l border-slate-200">إجمالي المنصرف</th>
+                                <th class="p-2">الرصيد المتبقي</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-200">`;
+
+                catItems.forEach(item => {
+                    const calc = getItemCalculatedStock(item.id);
+                    html += `
+                    <tr>
+                        <td class="p-2 font-bold border-l border-slate-200">${item.name}</td>
+                        <td class="p-2 border-l border-slate-200">${item.unit}</td>
+                        <td class="p-2 border-l border-slate-200 text-emerald-700 font-semibold">${calc.inQty}</td>
+                        <td class="p-2 border-l border-slate-200 text-red-700 font-semibold">${calc.outQty}</td>
+                        <td class="p-2 font-extrabold text-slate-900">${calc.currentStock} ${item.unit}</td>
+                    </tr>`;
+                });
+
+                html += `</tbody></table></div>`;
+            });
+
+            container.innerHTML = html || '<p class="text-center py-4 font-bold text-slate-500">لا توجد بيانات للعرض</p>';
+            document.getElementById('category-stock-report-modal').classList.remove('hidden');
+        }
+
+        function closeCategoryStockModal() {
+            document.getElementById('category-stock-report-modal').classList.add('hidden');
+        }
+
+        function openReportModal(filterType) {
+            document.getElementById('report-type-filter').value = filterType;
+            renderReportContent();
+            document.getElementById('printable-report-modal').classList.remove('hidden');
+        }
+
+        function closeReportModal() {
+            document.getElementById('printable-report-modal').classList.add('hidden');
+        }
+
+        function renderReportContent() {
+            const filter = document.getElementById('report-type-filter').value;
+            document.getElementById('report-date-display').textContent = new Date().toLocaleDateString('ar-EG');
+            document.getElementById('report-id-display').textContent = 'REP-' + Math.floor(1000 + Math.random() * 9000);
+
+            let logs = [...appData.transactions];
+            let title = 'تقرير موحد لجميع الحركات بالمخزن';
+
+            if (filter === 'وارد') {
+                logs = logs.filter(t => t.type === 'وارد');
+                title = 'تقرير إجمالي الوارد إلى المخزن الرئيسي';
+            } else if (filter.startsWith('فرع')) {
+                logs = logs.filter(t => t.type === 'صرف' && t.branch === filter);
+                title = `تقرير المنصرف الخاص بـ (${filter})`;
+            }
+
+            document.getElementById('report-title-display').textContent = title;
+
+            let totalQty = 0;
+            const tbody = document.getElementById('report-table-body');
+            let html = '';
+
+            logs.forEach((tx, idx) => {
+                const item = appData.items.find(i => i.id === tx.itemId) || { name: 'صنف محذوف', category: '---', unit: '' };
+                totalQty += parseFloat(tx.qty || 0);
+
+                html += `
+                <tr class="border-b border-slate-200">
+                    <td class="p-2 text-center border-l border-slate-200 font-semibold">${idx + 1}</td>
+                    <td class="p-2 border-l border-slate-200 font-bold">${tx.type}</td>
+                    <td class="p-2 border-l border-slate-200 font-bold">${item.name}</td>
+                    <td class="p-2 border-l border-slate-200">${item.category}</td>
+                    <td class="p-2 border-l border-slate-200 font-black">${tx.qty} ${item.unit}</td>
+                    <td class="p-2 border-l border-slate-200">${tx.type === 'وارد' ? 'المخزن الرئيسي' : tx.branch}</td>
+                    <td class="p-2 text-center">${tx.date}</td>
+                </tr>`;
+            });
+
+            tbody.innerHTML = html || '<tr><td colspan="7" class="text-center py-4 font-bold">لا توجد حركات مطابقة للتقرير</td></tr>';
+            document.getElementById('rep-summary-count').textContent = logs.length;
+            document.getElementById('rep-summary-qty').textContent = totalQty;
+        }
+
+        // --- 12. التشغيل عند التحميل ---
+        window.addEventListener('DOMContentLoaded', () => {
+            loadData();
+            checkAuth();
+            updateAllUI();
+        });
+    </script>
+</body>
+</html>
